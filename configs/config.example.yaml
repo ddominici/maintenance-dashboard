@@ -1,0 +1,42 @@
+app:
+  name: maintenance-dashboard
+  env: development
+  host: 0.0.0.0
+  port: 8080
+  read_timeout_seconds: 15
+  write_timeout_seconds: 15
+  idle_timeout_seconds: 60
+
+auth:
+  enabled: true
+  username: admin
+  password: change-me
+
+database:
+  mode: sql
+  host: localhost
+  port: 1433
+  instance: ""
+  name: MaintenanceDB
+  username: sa
+  password: your-password
+  encrypt: false
+  trust_server_certificate: true
+  connection_timeout_seconds: 10
+  max_open_conns: 20
+  max_idle_conns: 10
+  conn_max_lifetime_minutes: 30
+
+cache:
+  enabled: true
+  default_ttl_seconds: 60
+  dashboard_ttl_seconds: 30
+  detail_ttl_seconds: 60
+  filters_ttl_seconds: 300
+  cleanup_interval_seconds: 60
+
+ui:
+  default_language: en
+  supported_languages:
+    - en
+    - it
