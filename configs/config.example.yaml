@@ -12,6 +12,7 @@ auth:
   username: admin
   password: change-me
 
+# mode: sql or integrated. When "integrated", username and password are ignored
 database:
   mode: sql
   host: localhost
