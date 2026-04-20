@@ -6,6 +6,7 @@
 # Keep config.example.yaml; exclude the real config with credentials.
 configs/config.yaml
 .env
+
 # Allow .env.example to be committed as a reference template.
 !.env.example
 
