@@ -7,9 +7,14 @@ import (
 	appindexes "maintenance-dashboard/internal/app/indexes"
 )
 
-type IndexesHandler struct{ Service *appindexes.Service }
+type IndexesHandler struct{ Services map[string]*appindexes.Service }
 
 func (h IndexesHandler) TopFragmented(w http.ResponseWriter, r *http.Request) {
+	svc, err := resolveServer(h.Services, r)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "unknown_server", err.Error())
+		return
+	}
 	filters, err := ParseFilters(r)
 	if err != nil {
 		Error(w, http.StatusBadRequest, "invalid_filters", err.Error())
@@ -24,7 +29,7 @@ func (h IndexesHandler) TopFragmented(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	data, err := h.Service.GetTopFragmentedIndexes(r.Context(), filters, limit)
+	data, err := svc.GetTopFragmentedIndexes(r.Context(), filters, limit)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "indexes_failed", err.Error())
 		return

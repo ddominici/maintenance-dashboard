@@ -6,9 +6,14 @@ import (
 	appmaintenance "maintenance-dashboard/internal/app/maintenance"
 )
 
-type MaintenanceHandler struct{ Service *appmaintenance.Service }
+type MaintenanceHandler struct{ Services map[string]*appmaintenance.Service }
 
 func (h MaintenanceHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	svc, err := resolveServer(h.Services, r)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "unknown_server", err.Error())
+		return
+	}
 	filters, err := ParseFilters(r)
 	if err != nil {
 		Error(w, http.StatusBadRequest, "invalid_filters", err.Error())
@@ -24,7 +29,7 @@ func (h MaintenanceHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid_granularity", "granularity must be day, week, or month")
 		return
 	}
-	data, err := h.Service.GetMaintenanceReport(r.Context(), filters, granularity)
+	data, err := svc.GetMaintenanceReport(r.Context(), filters, granularity)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "maintenance_summary_failed", err.Error())
 		return

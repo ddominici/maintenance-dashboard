@@ -7,9 +7,14 @@ import (
 	apperrors "maintenance-dashboard/internal/app/errors"
 )
 
-type MaintenanceErrorsHandler struct{ Service *apperrors.Service }
+type MaintenanceErrorsHandler struct{ Services map[string]*apperrors.Service }
 
 func (h MaintenanceErrorsHandler) Report(w http.ResponseWriter, r *http.Request) {
+	svc, err := resolveServer(h.Services, r)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "unknown_server", err.Error())
+		return
+	}
 	filters, err := ParseFilters(r)
 	if err != nil {
 		Error(w, http.StatusBadRequest, "invalid_filters", err.Error())
@@ -37,7 +42,7 @@ func (h MaintenanceErrorsHandler) Report(w http.ResponseWriter, r *http.Request)
 		limit = n
 	}
 
-	data, err := h.Service.GetMaintenanceErrorsReport(r.Context(), filters, granularity, limit)
+	data, err := svc.GetMaintenanceErrorsReport(r.Context(), filters, granularity, limit)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "maintenance_errors_failed", err.Error())
 		return

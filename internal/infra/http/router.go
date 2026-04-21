@@ -27,6 +27,8 @@ func NewRouter(cfg config.Config, h Handlers) (http.Handler, error) {
 	mux.HandleFunc("/api/meta/health", h.Meta.Health)
 
 	protected := http.NewServeMux()
+	protected.HandleFunc("/api/meta/servers", h.Meta.Servers)
+	protected.HandleFunc("/api/meta/server-status", h.Meta.ServerStatus)
 	protected.HandleFunc("/api/meta/filters", h.Meta.Filters)
 	protected.HandleFunc("/api/dashboard/summary", h.Dashboard.Summary)
 	protected.HandleFunc("/api/statistics/most-modified", h.Statistics.MostModified)

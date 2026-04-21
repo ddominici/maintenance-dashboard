@@ -6,9 +6,14 @@ import (
 	appbackup "maintenance-dashboard/internal/app/backup"
 )
 
-type BackupHandler struct{ Service *appbackup.Service }
+type BackupHandler struct{ Services map[string]*appbackup.Service }
 
 func (h BackupHandler) Report(w http.ResponseWriter, r *http.Request) {
+	svc, err := resolveServer(h.Services, r)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "unknown_server", err.Error())
+		return
+	}
 	filters, err := ParseFilters(r)
 	if err != nil {
 		Error(w, http.StatusBadRequest, "invalid_filters", err.Error())
@@ -24,7 +29,7 @@ func (h BackupHandler) Report(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid_granularity", "granularity must be day, week, or month")
 		return
 	}
-	data, err := h.Service.GetBackupReport(r.Context(), filters, granularity)
+	data, err := svc.GetBackupReport(r.Context(), filters, granularity)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "backup_report_failed", err.Error())
 		return

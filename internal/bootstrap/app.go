@@ -25,7 +25,7 @@ import (
 
 type App struct {
 	cfg    config.Config
-	db     *sql.DB
+	dbs    map[string]*sql.DB
 	server *http.Server
 	logger *logging.Logger
 }
@@ -37,37 +37,64 @@ func NewApp() (*App, error) {
 	}
 
 	logger := logging.New()
-	sqlDB, err := db.Connect(cfg.Database)
-	if err != nil {
-		return nil, err
+
+	dbs := make(map[string]*sql.DB, len(cfg.Servers))
+	for _, srv := range cfg.Servers {
+		sqlDB, err := db.Connect(srv.Database)
+		if err != nil {
+			for _, d := range dbs {
+				_ = d.Close()
+			}
+			return nil, fmt.Errorf("connect server %q: %w", srv.Name, err)
+		}
+		dbs[srv.Name] = sqlDB
 	}
 
 	var memCache cache.Cache
 	if cfg.Cache.Enabled {
 		memCache = cache.NewMemoryCache(time.Duration(cfg.Cache.CleanupIntervalSeconds) * time.Second)
 	}
-	repo := repository.NewCommandLogRepository(sqlDB)
 
-	metaSvc := appmeta.NewService(repo, memCache, time.Duration(cfg.Cache.FiltersTTLSeconds)*time.Second)
-	dashSvc := appdashboard.NewService(repo, memCache, time.Duration(cfg.Cache.DashboardTTLSeconds)*time.Second)
-	statsSvc := appstatistics.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
-	indexesSvc := appindexes.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
-	maintenanceSvc := appmaintenance.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
-	backupSvc := appbackup.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
-	operationsSvc := appoperations.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
-	longRunningSvc := applongrunning.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
-	errorsSvc := apperrors.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+	metaServices := make(map[string]*appmeta.Service, len(cfg.Servers))
+	dashServices := make(map[string]*appdashboard.Service, len(cfg.Servers))
+	statsServices := make(map[string]*appstatistics.Service, len(cfg.Servers))
+	indexesServices := make(map[string]*appindexes.Service, len(cfg.Servers))
+	maintenanceServices := make(map[string]*appmaintenance.Service, len(cfg.Servers))
+	backupServices := make(map[string]*appbackup.Service, len(cfg.Servers))
+	operationsServices := make(map[string]*appoperations.Service, len(cfg.Servers))
+	longRunningServices := make(map[string]*applongrunning.Service, len(cfg.Servers))
+	errorsServices := make(map[string]*apperrors.Service, len(cfg.Servers))
+
+	for _, srv := range cfg.Servers {
+		repo := repository.NewCommandLogRepository(dbs[srv.Name])
+		metaServices[srv.Name] = appmeta.NewService(repo, memCache, time.Duration(cfg.Cache.FiltersTTLSeconds)*time.Second)
+		dashServices[srv.Name] = appdashboard.NewService(repo, memCache, time.Duration(cfg.Cache.DashboardTTLSeconds)*time.Second)
+		statsServices[srv.Name] = appstatistics.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+		indexesServices[srv.Name] = appindexes.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+		maintenanceServices[srv.Name] = appmaintenance.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+		backupServices[srv.Name] = appbackup.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+		operationsServices[srv.Name] = appoperations.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+		longRunningServices[srv.Name] = applongrunning.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+		errorsServices[srv.Name] = apperrors.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
+	}
+
+	serverNames := make([]string, len(cfg.Servers))
+	serverInfos := make([]httpx.ServerInfo, len(cfg.Servers))
+	for i, s := range cfg.Servers {
+		serverNames[i] = s.Name
+		serverInfos[i] = httpx.ServerInfo{Name: s.Name, Host: s.Database.Host, DB: dbs[s.Name]}
+	}
 
 	router, err := httpx.NewRouter(cfg, httpx.Handlers{
-		Meta:        httpx.MetaHandler{Service: metaSvc},
-		Dashboard:   httpx.DashboardHandler{Service: dashSvc},
-		Statistics:  httpx.StatisticsHandler{Service: statsSvc},
-		Indexes:     httpx.IndexesHandler{Service: indexesSvc},
-		Maintenance: httpx.MaintenanceHandler{Service: maintenanceSvc},
-		Backup:      httpx.BackupHandler{Service: backupSvc},
-		Operations:  httpx.OperationsHandler{Service: operationsSvc},
-		LongRunning:       httpx.LongRunningHandler{Service: longRunningSvc},
-		MaintenanceErrors: httpx.MaintenanceErrorsHandler{Service: errorsSvc},
+		Meta:              httpx.MetaHandler{Services: metaServices, ServerNames: serverNames, ServerInfos: serverInfos},
+		Dashboard:         httpx.DashboardHandler{Services: dashServices},
+		Statistics:        httpx.StatisticsHandler{Services: statsServices},
+		Indexes:           httpx.IndexesHandler{Services: indexesServices},
+		Maintenance:       httpx.MaintenanceHandler{Services: maintenanceServices},
+		Backup:            httpx.BackupHandler{Services: backupServices},
+		Operations:        httpx.OperationsHandler{Services: operationsServices},
+		LongRunning:       httpx.LongRunningHandler{Services: longRunningServices},
+		MaintenanceErrors: httpx.MaintenanceErrorsHandler{Services: errorsServices},
 	})
 	if err != nil {
 		return nil, err
@@ -81,7 +108,7 @@ func NewApp() (*App, error) {
 		IdleTimeout:  time.Duration(cfg.App.IdleTimeoutSeconds) * time.Second,
 	}
 
-	return &App{cfg: cfg, db: sqlDB, server: srv, logger: logger}, nil
+	return &App{cfg: cfg, dbs: dbs, server: srv, logger: logger}, nil
 }
 
 func (a *App) Run() error {

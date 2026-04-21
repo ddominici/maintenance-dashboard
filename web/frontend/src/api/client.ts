@@ -1,5 +1,15 @@
+let currentServer = ''
+
+export function setCurrentServer(server: string) {
+  currentServer = server
+}
+
 export async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
+  const fullUrl = currentServer
+    ? url + (url.includes('?') ? '&' : '?') + `server=${encodeURIComponent(currentServer)}`
+    : url
+
+  const response = await fetch(fullUrl, {
     headers: { Accept: 'application/json' },
   })
 

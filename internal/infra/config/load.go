@@ -25,6 +25,11 @@ func Load(path string) (Config, error) {
 
 	applyEnvOverrides(&cfg)
 
+	// Auto-migrate legacy single-server config into the servers list.
+	if len(cfg.Servers) == 0 && cfg.Database.Host != "" {
+		cfg.Servers = []ServerConfig{{Name: "default", Database: cfg.Database}}
+	}
+
 	if err := Validate(cfg); err != nil {
 		return Config{}, err
 	}

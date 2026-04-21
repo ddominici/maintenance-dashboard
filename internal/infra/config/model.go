@@ -3,9 +3,15 @@ package config
 type Config struct {
 	App      AppConfig      `yaml:"app"`
 	Auth     AuthConfig     `yaml:"auth"`
-	Database DatabaseConfig `yaml:"database"`
+	Database DatabaseConfig `yaml:"database"` // legacy single-server; auto-migrated to Servers on load
+	Servers  []ServerConfig `yaml:"servers"`
 	Cache    CacheConfig    `yaml:"cache"`
 	UI       UIConfig       `yaml:"ui"`
+}
+
+type ServerConfig struct {
+	Name     string         `yaml:"name"`
+	Database DatabaseConfig `yaml:"database"`
 }
 
 type AppConfig struct {

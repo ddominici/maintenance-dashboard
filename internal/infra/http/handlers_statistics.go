@@ -7,9 +7,14 @@ import (
 	appstatistics "maintenance-dashboard/internal/app/statistics"
 )
 
-type StatisticsHandler struct{ Service *appstatistics.Service }
+type StatisticsHandler struct{ Services map[string]*appstatistics.Service }
 
 func (h StatisticsHandler) MostModified(w http.ResponseWriter, r *http.Request) {
+	svc, err := resolveServer(h.Services, r)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "unknown_server", err.Error())
+		return
+	}
 	filters, err := ParseFilters(r)
 	if err != nil {
 		Error(w, http.StatusBadRequest, "invalid_filters", err.Error())
@@ -24,7 +29,7 @@ func (h StatisticsHandler) MostModified(w http.ResponseWriter, r *http.Request) 
 		}
 		limit = n
 	}
-	data, err := h.Service.GetMostModifiedStatistics(r.Context(), filters, limit)
+	data, err := svc.GetMostModifiedStatistics(r.Context(), filters, limit)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "statistics_failed", err.Error())
 		return

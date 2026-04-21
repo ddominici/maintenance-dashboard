@@ -12,21 +12,56 @@ auth:
   username: admin
   password: change-me
 
-# mode: sql or integrated. When "integrated", username and password are ignored
-database:
-  mode: sql
-  host: localhost
-  port: 1433
-  instance: ""
-  name: MaintenanceDB
-  username: sa
-  password: your-password
-  encrypt: false
-  trust_server_certificate: true
-  connection_timeout_seconds: 10
-  max_open_conns: 20
-  max_idle_conns: 10
-  conn_max_lifetime_minutes: 30
+# Multiple servers — each entry is selectable from the UI dropdown.
+# mode: sql or integrated. When "integrated", username and password are ignored.
+# For a single server you can still use the legacy "database:" key (auto-migrated).
+servers:
+  - name: production
+    database:
+      mode: sql
+      host: prod-server
+      port: 1433
+      instance: ""
+      name: MaintenanceDB
+      username: sa
+      password: your-password
+      encrypt: false
+      trust_server_certificate: true
+      connection_timeout_seconds: 10
+      max_open_conns: 20
+      max_idle_conns: 10
+      conn_max_lifetime_minutes: 30
+  - name: staging
+    database:
+      mode: sql
+      host: staging-server
+      port: 1433
+      instance: ""
+      name: MaintenanceDB
+      username: sa
+      password: your-password
+      encrypt: false
+      trust_server_certificate: true
+      connection_timeout_seconds: 10
+      max_open_conns: 10
+      max_idle_conns: 5
+      conn_max_lifetime_minutes: 30
+
+# Legacy single-server format (still supported, auto-converted to a "default" server entry):
+# database:
+#   mode: sql
+#   host: localhost
+#   port: 1433
+#   instance: ""
+#   name: MaintenanceDB
+#   username: sa
+#   password: your-password
+#   encrypt: false
+#   trust_server_certificate: true
+#   connection_timeout_seconds: 10
+#   max_open_conns: 20
+#   max_idle_conns: 10
+#   conn_max_lifetime_minutes: 30
 
 cache:
   enabled: true

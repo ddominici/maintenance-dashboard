@@ -1,12 +1,23 @@
 package httpx
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"maintenance-dashboard/internal/domain/commandlog"
 )
+
+func resolveServer[T any](services map[string]T, r *http.Request) (T, error) {
+	name := r.URL.Query().Get("server")
+	svc, ok := services[name]
+	if !ok {
+		var zero T
+		return zero, fmt.Errorf("unknown server: %q", name)
+	}
+	return svc, nil
+}
 
 func ParseFilters(r *http.Request) (commandlog.QueryFilters, error) {
 	q := r.URL.Query()

@@ -7,9 +7,14 @@ import (
 	applongrunning "maintenance-dashboard/internal/app/longrunning"
 )
 
-type LongRunningHandler struct{ Service *applongrunning.Service }
+type LongRunningHandler struct{ Services map[string]*applongrunning.Service }
 
 func (h LongRunningHandler) Report(w http.ResponseWriter, r *http.Request) {
+	svc, err := resolveServer(h.Services, r)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "unknown_server", err.Error())
+		return
+	}
 	filters, err := ParseFilters(r)
 	if err != nil {
 		Error(w, http.StatusBadRequest, "invalid_filters", err.Error())
@@ -27,7 +32,7 @@ func (h LongRunningHandler) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	minDuration := 300 // default: 5 minutes
+	minDuration := 300
 	if v := r.URL.Query().Get("minDuration"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
@@ -47,7 +52,7 @@ func (h LongRunningHandler) Report(w http.ResponseWriter, r *http.Request) {
 		limit = n
 	}
 
-	data, err := h.Service.GetLongRunningReport(r.Context(), filters, granularity, minDuration, limit)
+	data, err := svc.GetLongRunningReport(r.Context(), filters, granularity, minDuration, limit)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "long_running_report_failed", err.Error())
 		return
