@@ -236,13 +236,13 @@ auth:
   username: admin
   password: change-me           # cambiare prima della messa in produzione
 
-# Più server — ogni voce è selezionabile dall'interfaccia utente.
+# Più server — ogni voce è selezionabile dal menu a tendina nell'interfaccia utente.
 # mode: sql = autenticazione SQL Server; integrated = Windows Authentication (solo Windows)
 servers:
   - name: production            # nome visualizzato nell'interfaccia
     database:
       mode: sql
-      host: localhost           # hostname o indirizzo IP del server SQL
+      host: prod-server         # hostname o indirizzo IP del server SQL
       port: 1433                # porta (default SQL Server: 1433)
       instance: ""              # nome istanza named (es. "SQLEXPRESS"); lasciare vuoto per default
       name: MaintenanceDB       # database che contiene CommandLog
@@ -254,6 +254,21 @@ servers:
       max_open_conns: 20        # connessioni aperte massime nel pool
       max_idle_conns: 10        # connessioni idle massime nel pool
       conn_max_lifetime_minutes: 30 # durata massima di una connessione nel pool
+  - name: staging               # secondo server — aggiungere tutte le voci necessarie
+    database:
+      mode: sql
+      host: staging-server
+      port: 1433
+      instance: ""
+      name: MaintenanceDB
+      username: sa
+      password: your-password
+      encrypt: false
+      trust_server_certificate: true
+      connection_timeout_seconds: 10
+      max_open_conns: 10
+      max_idle_conns: 5
+      conn_max_lifetime_minutes: 30
 
 # Formato legacy a server singolo (ancora supportato — convertito automaticamente in servers[0] "default"):
 # database:
