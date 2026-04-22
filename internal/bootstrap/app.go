@@ -42,10 +42,8 @@ func NewApp() (*App, error) {
 	for _, srv := range cfg.Servers {
 		sqlDB, err := db.Connect(srv.Database)
 		if err != nil {
-			for _, d := range dbs {
-				_ = d.Close()
-			}
-			return nil, fmt.Errorf("connect server %q: %w", srv.Name, err)
+			logger.Infof("server %q unreachable, will appear offline: %v", srv.Name, err)
+			continue
 		}
 		dbs[srv.Name] = sqlDB
 	}
@@ -66,7 +64,11 @@ func NewApp() (*App, error) {
 	errorsServices := make(map[string]*apperrors.Service, len(cfg.Servers))
 
 	for _, srv := range cfg.Servers {
-		repo := repository.NewCommandLogRepository(dbs[srv.Name])
+		sqlDB, ok := dbs[srv.Name]
+		if !ok {
+			continue
+		}
+		repo := repository.NewCommandLogRepository(sqlDB)
 		metaServices[srv.Name] = appmeta.NewService(repo, memCache, time.Duration(cfg.Cache.FiltersTTLSeconds)*time.Second)
 		dashServices[srv.Name] = appdashboard.NewService(repo, memCache, time.Duration(cfg.Cache.DashboardTTLSeconds)*time.Second)
 		statsServices[srv.Name] = appstatistics.NewService(repo, memCache, time.Duration(cfg.Cache.DetailTTLSeconds)*time.Second)
@@ -82,7 +84,7 @@ func NewApp() (*App, error) {
 	serverInfos := make([]httpx.ServerInfo, len(cfg.Servers))
 	for i, s := range cfg.Servers {
 		serverNames[i] = s.Name
-		serverInfos[i] = httpx.ServerInfo{Name: s.Name, Host: s.Database.Host, DB: dbs[s.Name]}
+		serverInfos[i] = httpx.ServerInfo{Name: s.Name, Host: s.Database.Host, DB: dbs[s.Name]} // DB is nil if unreachable
 	}
 
 	router, err := httpx.NewRouter(cfg, httpx.Handlers{

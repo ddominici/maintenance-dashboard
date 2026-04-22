@@ -142,6 +142,19 @@ func applyEnvOverrides(cfg *Config) {
 	setInt("CACHE_FILTERS_TTL_SECONDS", &cfg.Cache.FiltersTTLSeconds)
 	setInt("CACHE_CLEANUP_INTERVAL_SECONDS", &cfg.Cache.CleanupIntervalSeconds)
 
+	for i := range cfg.Servers {
+		prefix := "SERVER_" + serverEnvName(cfg.Servers[i].Name) + "_"
+		setString(prefix+"HOST", &cfg.Servers[i].Database.Host)
+		setInt(prefix+"PORT", &cfg.Servers[i].Database.Port)
+		setString(prefix+"INSTANCE", &cfg.Servers[i].Database.Instance)
+		setString(prefix+"MODE", &cfg.Servers[i].Database.Mode)
+		setString(prefix+"NAME", &cfg.Servers[i].Database.Name)
+		setString(prefix+"USERNAME", &cfg.Servers[i].Database.Username)
+		setString(prefix+"PASSWORD", &cfg.Servers[i].Database.Password)
+		setBool(prefix+"ENCRYPT", &cfg.Servers[i].Database.Encrypt)
+		setBool(prefix+"TRUST_SERVER_CERTIFICATE", &cfg.Servers[i].Database.TrustServerCertificate)
+	}
+
 	setString("UI_DEFAULT_LANGUAGE", &cfg.UI.DefaultLanguage)
 	if v := os.Getenv("UI_SUPPORTED_LANGUAGES"); v != "" {
 		parts := strings.Split(v, ",")
@@ -156,4 +169,18 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.UI.SupportedLanguages = langs
 		}
 	}
+}
+
+// serverEnvName normalizes a server name for use in env var names.
+// "SQL 2019-prod" → "SQL_2019_PROD"
+func serverEnvName(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(name) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
 }

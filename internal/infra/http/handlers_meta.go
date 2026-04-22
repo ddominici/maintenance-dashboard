@@ -45,10 +45,14 @@ func (h MetaHandler) ServerStatus(w http.ResponseWriter, r *http.Request) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 			defer cancel()
+			reachable := false
+			if si.DB != nil {
+				reachable = si.DB.PingContext(ctx) == nil
+			}
 			result[idx] = item{
 				Name:      si.Name,
 				Host:      si.Host,
-				Reachable: si.DB.PingContext(ctx) == nil,
+				Reachable: reachable,
 			}
 		}(i, info)
 	}
