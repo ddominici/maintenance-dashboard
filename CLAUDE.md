@@ -7,7 +7,7 @@ Full-stack dashboard for SQL Server maintenance analytics. Reads data from `Main
 **Stack:**
 - Backend: Go 1.26, standard library HTTP server
 - Frontend: React 18 + TypeScript + Vite
-- Database: Microsoft SQL Server (`go-mssqldb`)
+- Database: Microsoft SQL Server (`go-mssqldb`), multi-server support
 - Styling: Tailwind CSS 3.4
 - State/Fetching: TanStack React Query v5
 - Routing: React Router v6
@@ -22,10 +22,14 @@ Full-stack dashboard for SQL Server maintenance analytics. Reads data from `Main
 cmd/server/           # Entry point (main.go)
 internal/
   app/                # Service layer (business logic + caching)
+    backup/
     dashboard/
+    errors/
     indexes/
+    longrunning/
     maintenance/
     meta/
+    operations/
     statistics/
     shared/
   domain/commandlog/  # Repository interfaces and domain models
@@ -48,7 +52,7 @@ web/frontend/
     api/              # HTTP client wrappers
     app/              # App layout and providers
     components/       # Shared UI components
-    features/         # Feature pages (dashboard, indexes, ...)
+    features/         # Feature pages (dashboard, indexes, servers, ...)
     hooks/            # Custom React hooks
     i18n/             # en.json / it.json translation files
     types/            # TypeScript interfaces
@@ -114,11 +118,18 @@ app:
 auth:
   enabled, username, password
 
-database:
-  mode: sql | integrated
-  host, port, instance, name
-  username, password
-  encrypt, trust_server_certificate
+servers:                    # list of named SQL Server connections
+  - name: production
+    database:
+      mode: sql | integrated
+      host, port, instance, name
+      username, password
+      encrypt, trust_server_certificate
+
+# Legacy single-server format still supported (auto-migrated to servers[0] named "default"):
+# database:
+#   mode: sql | integrated
+#   ...
 
 cache:
   enabled
@@ -133,7 +144,6 @@ ui:
 ```
 APP_PORT, APP_HOST
 AUTH_USERNAME, AUTH_PASSWORD
-DATABASE_MODE, DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, DATABASE_USERNAME, DATABASE_PASSWORD
 CACHE_ENABLED, CACHE_DEFAULT_TTL_SECONDS
 UI_DEFAULT_LANGUAGE
 ```
@@ -155,8 +165,9 @@ HTTP Handler  →  Service (app/)  →  Repository Interface (domain/)
 - **Domain** defines repository interfaces (`MetaRepository`, `DashboardRepository`, etc.)
 - **Infrastructure** implements them with raw SQL queries
 - **Services** depend on interfaces only, never concrete types
-- **bootstrap/app.go** constructs the full dependency graph
+- **bootstrap/app.go** constructs the full dependency graph; one service map per configured server
 - All services accept a common `QueryFilters` struct; URL params → domain filters → SQL WHERE clauses
+- **Multi-server**: handlers receive `map[string]*Service` keyed by server name; `?server=<name>` selects the target at request time (defaults to first server when omitted)
 
 ### Caching
 - All service methods cache results keyed by SHA1 hash of filters
@@ -185,13 +196,19 @@ HTTP Handler  →  Service (app/)  →  Repository Interface (domain/)
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/meta/health` | No | Health check |
+| GET | `/api/meta/servers` | Yes | List configured server names |
+| GET | `/api/meta/server-status` | Yes | Reachability status per server (parallel ping) |
 | GET | `/api/meta/filters` | Yes | Available filter options |
 | GET | `/api/dashboard/summary` | Yes | Dashboard metrics |
 | GET | `/api/statistics/most-modified` | Yes | Most updated statistics |
 | GET | `/api/indexes/top-fragmented` | Yes | Fragmented indexes |
 | GET | `/api/maintenance/summary` | Yes | Maintenance report |
+| GET | `/api/operations/per-batch` | Yes | Operations per period and command type |
+| GET | `/api/backup/report` | Yes | Backup duration and error counts |
+| GET | `/api/errors/report` | Yes | Failed operations report |
+| GET | `/api/longrunning/report` | Yes | Long-running operations report |
 
-Common query parameters: `dateFrom`, `dateTo`, `database`, `schema`, `objectName`, `commandType`, `hasErrors`, `limit`.
+Common query parameters: `server` (selects which configured server to query), `dateFrom`, `dateTo`, `database`, `schema`, `objectName`, `commandType`, `hasErrors`, `limit`.
 
 ---
 
@@ -199,12 +216,15 @@ Common query parameters: `dateFrom`, `dateTo`, `database`, `schema`, `objectName
 
 | Route | Page |
 |-------|------|
+| `/servers` | Servers — reachability status of all configured SQL Server connections |
 | `/` | Dashboard — summary cards with totals and filter options |
 | `/modified-statistics` | Most Modified Statistics — paginated, limit 10–500 |
 | `/fragmented-indexes` | Top Fragmented Indexes |
 | `/maintenance-summary` | Maintenance Summary — timeline and aggregates |
-
-**Placeholder routes (not yet implemented):** Operations Per Batch, Maintenance Errors, Long Running Operations.
+| `/operations-per-batch` | Operations Per Batch — operation count per period and command type |
+| `/backup-overview` | Backup Overview — backup duration and error count per database |
+| `/maintenance-errors` | Maintenance Errors — failed operations with timeline and detail |
+| `/long-running-operations` | Long Running Operations — operations exceeding a configurable duration threshold |
 
 ---
 

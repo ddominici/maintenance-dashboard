@@ -17,6 +17,7 @@ Dashboard web per visualizzare e analizzare le metriche di manutenzione SQL Serv
 
 ## Funzionalità
 
+- **Servers** — stato di raggiungibilità di tutte le connessioni SQL Server configurate
 - **Dashboard** — riepilogo globale: totale comandi, errori, durata media, conteggi per tipo
 - **Top Fragmented Indexes** — indici ordinati per numero di operazioni di manutenzione, con percentuale di frammentazione estratta dall'XML `ExtendedInfo`
 - **Most Modified Statistics** — oggetti con più aggiornamenti statistiche, con page count e modification counter dall'XML `ExtendedInfo`
@@ -26,7 +27,7 @@ Dashboard web per visualizzare e analizzare le metriche di manutenzione SQL Serv
 - **Maintenance Errors** — operazioni in errore: grafico temporale, riepilogo per tipo, dettaglio con numero e messaggio di errore SQL Server
 - **Long Running Operations** — operazioni che superano una soglia di durata configurabile, con grafico della durata massima nel tempo e tabella delle singole operazioni più lente
 
-Tutte le pagine supportano filtri per database, intervallo di date e granularità (giornaliera / settimanale / mensile).
+Tutte le pagine (eccetto Servers) supportano filtri per database, intervallo di date e granularità (giornaliera / settimanale / mensile). Se sono configurati più server, un selettore server è disponibile su ogni pagina.
 
 ---
 
@@ -235,21 +236,30 @@ auth:
   username: admin
   password: change-me           # cambiare prima della messa in produzione
 
-database:
-  mode: sql                     # sql = autenticazione SQL Server
-                                # integrated = Windows Authentication (solo Windows)
-  host: localhost               # hostname o indirizzo IP del server SQL
-  port: 1433                    # porta (default SQL Server: 1433)
-  instance: ""                  # nome istanza named (es. "SQLEXPRESS"); lasciare vuoto per default
-  name: MaintenanceDB           # nome del database che contiene CommandLog
-  username: sa                  # utente SQL (ignorato se mode: integrated)
-  password: your-password       # password SQL (ignorato se mode: integrated)
-  encrypt: false                # true = cifra la connessione TLS
-  trust_server_certificate: true # true = accetta certificati autofirmati
-  connection_timeout_seconds: 10
-  max_open_conns: 20            # connessioni aperte massime nel pool
-  max_idle_conns: 10            # connessioni idle massime nel pool
-  conn_max_lifetime_minutes: 30 # durata massima di una connessione nel pool
+# Più server — ogni voce è selezionabile dall'interfaccia utente.
+# mode: sql = autenticazione SQL Server; integrated = Windows Authentication (solo Windows)
+servers:
+  - name: production            # nome visualizzato nell'interfaccia
+    database:
+      mode: sql
+      host: localhost           # hostname o indirizzo IP del server SQL
+      port: 1433                # porta (default SQL Server: 1433)
+      instance: ""              # nome istanza named (es. "SQLEXPRESS"); lasciare vuoto per default
+      name: MaintenanceDB       # database che contiene CommandLog
+      username: sa              # utente SQL (ignorato se mode: integrated)
+      password: your-password   # password SQL (ignorato se mode: integrated)
+      encrypt: false            # true = cifra la connessione TLS
+      trust_server_certificate: true # true = accetta certificati autofirmati
+      connection_timeout_seconds: 10
+      max_open_conns: 20        # connessioni aperte massime nel pool
+      max_idle_conns: 10        # connessioni idle massime nel pool
+      conn_max_lifetime_minutes: 30 # durata massima di una connessione nel pool
+
+# Formato legacy a server singolo (ancora supportato — convertito automaticamente in servers[0] "default"):
+# database:
+#   mode: sql
+#   host: localhost
+#   ...
 
 cache:
   enabled: true                 # false = disabilita la cache (ogni richiesta interroga il DB)
@@ -268,7 +278,7 @@ ui:
 
 ### Variabili d'ambiente
 
-Ogni campo del file YAML corrisponde a una variabile d'ambiente. Le variabili sovrascrivono il valore YAML.
+I campi `app`, `auth`, `cache` e `ui` del file YAML corrispondono a variabili d'ambiente. Le variabili sovrascrivono il valore YAML.
 
 | Variabile | Corrispondenza YAML | Esempio |
 |---|---|---|
@@ -278,19 +288,6 @@ Ogni campo del file YAML corrisponde a una variabile d'ambiente. Le variabili so
 | `AUTH_ENABLED` | `auth.enabled` | `true` |
 | `AUTH_USERNAME` | `auth.username` | `admin` |
 | `AUTH_PASSWORD` | `auth.password` | `s3cr3t` |
-| `DATABASE_MODE` | `database.mode` | `sql` oppure `integrated` |
-| `DATABASE_HOST` | `database.host` | `sqlserver.internal` |
-| `DATABASE_PORT` | `database.port` | `1433` |
-| `DATABASE_INSTANCE` | `database.instance` | `SQLEXPRESS` |
-| `DATABASE_NAME` | `database.name` | `MaintenanceDB` |
-| `DATABASE_USERNAME` | `database.username` | `dashboard_user` |
-| `DATABASE_PASSWORD` | `database.password` | `s3cr3t` |
-| `DATABASE_ENCRYPT` | `database.encrypt` | `true` |
-| `DATABASE_TRUST_SERVER_CERTIFICATE` | `database.trust_server_certificate` | `false` |
-| `DATABASE_CONNECTION_TIMEOUT_SECONDS` | `database.connection_timeout_seconds` | `10` |
-| `DATABASE_MAX_OPEN_CONNS` | `database.max_open_conns` | `20` |
-| `DATABASE_MAX_IDLE_CONNS` | `database.max_idle_conns` | `10` |
-| `DATABASE_CONN_MAX_LIFETIME_MINUTES` | `database.conn_max_lifetime_minutes` | `30` |
 | `CACHE_ENABLED` | `cache.enabled` | `true` |
 | `CACHE_DEFAULT_TTL_SECONDS` | `cache.default_ttl_seconds` | `60` |
 | `CACHE_DASHBOARD_TTL_SECONDS` | `cache.dashboard_ttl_seconds` | `30` |
@@ -300,43 +297,47 @@ Ogni campo del file YAML corrisponde a una variabile d'ambiente. Le variabili so
 | `UI_DEFAULT_LANGUAGE` | `ui.default_language` | `it` |
 | `UI_SUPPORTED_LANGUAGES` | `ui.supported_languages` | `en,it` |
 
+I parametri di connessione al server (host, credenziali, ecc.) devono essere impostati in `configs/config.yaml` nella lista `servers:`; non sono mappati a variabili d'ambiente.
+
 ### Esempio file `.env`
 
 ```dotenv
 AUTH_PASSWORD=mia-password-sicura
-DATABASE_HOST=192.168.1.10
-DATABASE_NAME=MaintenanceDB
-DATABASE_USERNAME=dashboard_user
-DATABASE_PASSWORD=mia-password-db
 ```
 
 ### Connessione con Windows Authentication
 
-Per usare l'autenticazione integrata di Windows (solo su host Windows):
+Per usare l'autenticazione integrata di Windows (solo su host Windows), impostare `mode: integrated` nella voce server:
 
 ```yaml
-database:
-  mode: integrated
-  host: localhost
-  name: MaintenanceDB
-  # username e password vengono ignorati
+servers:
+  - name: production
+    database:
+      mode: integrated
+      host: localhost
+      name: MaintenanceDB
+      # username e password vengono ignorati
 ```
 
 ### Connessione a una named instance
 
 ```yaml
-database:
-  host: MYSERVER
-  instance: SQLEXPRESS   # si connette a MYSERVER\SQLEXPRESS
-  port: 0                # la porta viene ignorata quando si specifica l'istanza
+servers:
+  - name: production
+    database:
+      host: MYSERVER
+      instance: SQLEXPRESS   # si connette a MYSERVER\SQLEXPRESS
+      port: 0                # la porta viene ignorata quando si specifica l'istanza
 ```
 
 ### Connessione con TLS
 
 ```yaml
-database:
-  encrypt: true
-  trust_server_certificate: false  # false = verifica il certificato (raccomandato in produzione)
+servers:
+  - name: production
+    database:
+      encrypt: true
+      trust_server_certificate: false  # false = verifica il certificato (raccomandato in produzione)
 ```
 
 ---
@@ -369,14 +370,15 @@ curl http://localhost:8080/api/meta/health
 
 | Percorso | Pagina | Filtri principali |
 |---|---|---|
-| `/` | Dashboard | Database, date, tipo comando, solo errori |
-| `/fragmented-indexes` | Top Fragmented Indexes | Database, date, top N |
-| `/modified-statistics` | Most Modified Statistics | Database, date, top N |
-| `/operations-per-batch` | Operations Per Batch | Database, date, granularità |
-| `/maintenance-summary` | Maintenance Summary | Database, date, granularità |
-| `/backup-overview` | Backup Overview | Database, date, granularità |
-| `/maintenance-errors` | Maintenance Errors | Database, tipo comando, date, granularità |
-| `/long-running-operations` | Long Running Operations | Database, tipo comando, date, granularità, durata minima |
+| `/servers` | Servers | — |
+| `/` | Dashboard | Server, database, date, tipo comando, solo errori |
+| `/fragmented-indexes` | Top Fragmented Indexes | Server, database, date, top N |
+| `/modified-statistics` | Most Modified Statistics | Server, database, date, top N |
+| `/operations-per-batch` | Operations Per Batch | Server, database, date, granularità |
+| `/maintenance-summary` | Maintenance Summary | Server, database, date, granularità |
+| `/backup-overview` | Backup Overview | Server, database, date, granularità |
+| `/maintenance-errors` | Maintenance Errors | Server, database, tipo comando, date, granularità |
+| `/long-running-operations` | Long Running Operations | Server, database, tipo comando, date, granularità, durata minima |
 
 ---
 
@@ -387,8 +389,10 @@ Tutti gli endpoint (eccetto `/api/meta/health`) richiedono HTTP Basic Auth se `a
 | Metodo | Endpoint | Parametri query |
 |---|---|---|
 | `GET` | `/api/meta/health` | — |
-| `GET` | `/api/meta/filters` | — |
-| `GET` | `/api/dashboard/summary` | `database`, `dateFrom`, `dateTo`, `commandType`, `schema`, `object`, `onlyErrors` |
+| `GET` | `/api/meta/servers` | — |
+| `GET` | `/api/meta/server-status` | — |
+| `GET` | `/api/meta/filters` | `server` |
+| `GET` | `/api/dashboard/summary` | filtri standard |
 | `GET` | `/api/statistics/most-modified` | filtri standard + `limit` (1–500, default 50) |
 | `GET` | `/api/indexes/top-fragmented` | filtri standard + `limit` (1–500, default 50) |
 | `GET` | `/api/maintenance/summary` | filtri standard + `granularity` (day/week/month) |
@@ -401,6 +405,7 @@ Tutti gli endpoint (eccetto `/api/meta/health`) richiedono HTTP Basic Auth se `a
 
 | Parametro | Tipo | Descrizione |
 |---|---|---|
+| `server` | stringa | Nome del server di destinazione (come definito in `servers[].name`); default: primo server |
 | `database` | stringa | Filtra per nome database |
 | `dateFrom` | `YYYY-MM-DD` | Data di inizio (inclusa) |
 | `dateTo` | `YYYY-MM-DD` | Data di fine (inclusa) |

@@ -17,6 +17,7 @@ Web dashboard to visualise and analyse SQL Server maintenance metrics recorded b
 
 ## Features
 
+- **Servers** — reachability status of all configured SQL Server connections
 - **Dashboard** — global summary: total commands, errors, average duration, counts by type
 - **Top Fragmented Indexes** — indexes ordered by number of maintenance operations, with fragmentation percentage extracted from the `ExtendedInfo` XML column
 - **Most Modified Statistics** — objects with the most statistics updates, including page count and modification counter from the `ExtendedInfo` XML column
@@ -26,7 +27,7 @@ Web dashboard to visualise and analyse SQL Server maintenance metrics recorded b
 - **Maintenance Errors** — failed operations: timeline chart, summary by type, detail with SQL Server error number and message
 - **Long Running Operations** — operations exceeding a configurable duration threshold, with a chart of maximum duration over time and a table of the individual slowest operations
 
-All pages support filtering by database, date range, and granularity (daily / weekly / monthly).
+All pages (except Servers) support filtering by database, date range, and granularity (daily / weekly / monthly). When multiple servers are configured, a server selector is available on every page.
 
 ---
 
@@ -235,21 +236,30 @@ auth:
   username: admin
   password: change-me           # change this before going to production
 
-database:
-  mode: sql                     # sql = SQL Server authentication
-                                # integrated = Windows Authentication (Windows hosts only)
-  host: localhost               # hostname or IP address of the SQL Server
-  port: 1433                    # port (SQL Server default: 1433)
-  instance: ""                  # named instance (e.g. "SQLEXPRESS"); leave empty for default
-  name: MaintenanceDB           # database that contains CommandLog
-  username: sa                  # SQL login (ignored when mode: integrated)
-  password: your-password       # SQL password (ignored when mode: integrated)
-  encrypt: false                # true = encrypt the connection with TLS
-  trust_server_certificate: true # true = accept self-signed certificates
-  connection_timeout_seconds: 10
-  max_open_conns: 20            # maximum open connections in the pool
-  max_idle_conns: 10            # maximum idle connections in the pool
-  conn_max_lifetime_minutes: 30 # maximum lifetime of a pooled connection
+# Multiple servers — each entry is selectable from the UI.
+# mode: sql = SQL Server authentication; integrated = Windows Authentication (Windows hosts only)
+servers:
+  - name: production            # display name shown in the UI
+    database:
+      mode: sql
+      host: localhost           # hostname or IP address of the SQL Server
+      port: 1433                # port (SQL Server default: 1433)
+      instance: ""              # named instance (e.g. "SQLEXPRESS"); leave empty for default
+      name: MaintenanceDB       # database that contains CommandLog
+      username: sa              # SQL login (ignored when mode: integrated)
+      password: your-password   # SQL password (ignored when mode: integrated)
+      encrypt: false            # true = encrypt the connection with TLS
+      trust_server_certificate: true # true = accept self-signed certificates
+      connection_timeout_seconds: 10
+      max_open_conns: 20        # maximum open connections in the pool
+      max_idle_conns: 10        # maximum idle connections in the pool
+      conn_max_lifetime_minutes: 30 # maximum lifetime of a pooled connection
+
+# Legacy single-server format (still supported — auto-converted to a "default" servers entry):
+# database:
+#   mode: sql
+#   host: localhost
+#   ...
 
 cache:
   enabled: true                 # false = disable cache (every request hits the DB)
@@ -268,7 +278,7 @@ ui:
 
 ### Environment variables
 
-Every YAML field has a corresponding environment variable. Variables override the YAML value.
+Every `app`, `auth`, `cache`, and `ui` YAML field has a corresponding environment variable. Variables override the YAML value.
 
 | Variable | YAML field | Example |
 |---|---|---|
@@ -278,19 +288,6 @@ Every YAML field has a corresponding environment variable. Variables override th
 | `AUTH_ENABLED` | `auth.enabled` | `true` |
 | `AUTH_USERNAME` | `auth.username` | `admin` |
 | `AUTH_PASSWORD` | `auth.password` | `s3cr3t` |
-| `DATABASE_MODE` | `database.mode` | `sql` or `integrated` |
-| `DATABASE_HOST` | `database.host` | `sqlserver.internal` |
-| `DATABASE_PORT` | `database.port` | `1433` |
-| `DATABASE_INSTANCE` | `database.instance` | `SQLEXPRESS` |
-| `DATABASE_NAME` | `database.name` | `MaintenanceDB` |
-| `DATABASE_USERNAME` | `database.username` | `dashboard_user` |
-| `DATABASE_PASSWORD` | `database.password` | `s3cr3t` |
-| `DATABASE_ENCRYPT` | `database.encrypt` | `true` |
-| `DATABASE_TRUST_SERVER_CERTIFICATE` | `database.trust_server_certificate` | `false` |
-| `DATABASE_CONNECTION_TIMEOUT_SECONDS` | `database.connection_timeout_seconds` | `10` |
-| `DATABASE_MAX_OPEN_CONNS` | `database.max_open_conns` | `20` |
-| `DATABASE_MAX_IDLE_CONNS` | `database.max_idle_conns` | `10` |
-| `DATABASE_CONN_MAX_LIFETIME_MINUTES` | `database.conn_max_lifetime_minutes` | `30` |
 | `CACHE_ENABLED` | `cache.enabled` | `true` |
 | `CACHE_DEFAULT_TTL_SECONDS` | `cache.default_ttl_seconds` | `60` |
 | `CACHE_DASHBOARD_TTL_SECONDS` | `cache.dashboard_ttl_seconds` | `30` |
@@ -300,43 +297,47 @@ Every YAML field has a corresponding environment variable. Variables override th
 | `UI_DEFAULT_LANGUAGE` | `ui.default_language` | `it` |
 | `UI_SUPPORTED_LANGUAGES` | `ui.supported_languages` | `en,it` |
 
+Server connection parameters (host, credentials, etc.) must be set in `configs/config.yaml` under the `servers:` list; they do not map to environment variables.
+
 ### Example `.env` file
 
 ```dotenv
 AUTH_PASSWORD=my-secure-password
-DATABASE_HOST=192.168.1.10
-DATABASE_NAME=MaintenanceDB
-DATABASE_USERNAME=dashboard_user
-DATABASE_PASSWORD=my-db-password
 ```
 
 ### Windows Authentication
 
-To use integrated Windows Authentication (Windows hosts only):
+To use integrated Windows Authentication (Windows hosts only), set `mode: integrated` in the server entry:
 
 ```yaml
-database:
-  mode: integrated
-  host: localhost
-  name: MaintenanceDB
-  # username and password are ignored
+servers:
+  - name: production
+    database:
+      mode: integrated
+      host: localhost
+      name: MaintenanceDB
+      # username and password are ignored
 ```
 
 ### Named instance
 
 ```yaml
-database:
-  host: MYSERVER
-  instance: SQLEXPRESS   # connects to MYSERVER\SQLEXPRESS
-  port: 0                # port is ignored when an instance name is specified
+servers:
+  - name: production
+    database:
+      host: MYSERVER
+      instance: SQLEXPRESS   # connects to MYSERVER\SQLEXPRESS
+      port: 0                # port is ignored when an instance name is specified
 ```
 
 ### TLS connection
 
 ```yaml
-database:
-  encrypt: true
-  trust_server_certificate: false  # false = verify the certificate (recommended in production)
+servers:
+  - name: production
+    database:
+      encrypt: true
+      trust_server_certificate: false  # false = verify the certificate (recommended in production)
 ```
 
 ---
@@ -369,14 +370,15 @@ curl http://localhost:8080/api/meta/health
 
 | Path | Page | Main filters |
 |---|---|---|
-| `/` | Dashboard | Database, dates, command type, errors only |
-| `/fragmented-indexes` | Top Fragmented Indexes | Database, dates, top N |
-| `/modified-statistics` | Most Modified Statistics | Database, dates, top N |
-| `/operations-per-batch` | Operations Per Batch | Database, dates, granularity |
-| `/maintenance-summary` | Maintenance Summary | Database, dates, granularity |
-| `/backup-overview` | Backup Overview | Database, dates, granularity |
-| `/maintenance-errors` | Maintenance Errors | Database, command type, dates, granularity |
-| `/long-running-operations` | Long Running Operations | Database, command type, dates, granularity, min duration |
+| `/servers` | Servers | — |
+| `/` | Dashboard | Server, database, dates, command type, errors only |
+| `/fragmented-indexes` | Top Fragmented Indexes | Server, database, dates, top N |
+| `/modified-statistics` | Most Modified Statistics | Server, database, dates, top N |
+| `/operations-per-batch` | Operations Per Batch | Server, database, dates, granularity |
+| `/maintenance-summary` | Maintenance Summary | Server, database, dates, granularity |
+| `/backup-overview` | Backup Overview | Server, database, dates, granularity |
+| `/maintenance-errors` | Maintenance Errors | Server, database, command type, dates, granularity |
+| `/long-running-operations` | Long Running Operations | Server, database, command type, dates, granularity, min duration |
 
 ---
 
@@ -387,8 +389,10 @@ All endpoints (except `/api/meta/health`) require HTTP Basic Auth when `auth.ena
 | Method | Endpoint | Query parameters |
 |---|---|---|
 | `GET` | `/api/meta/health` | — |
-| `GET` | `/api/meta/filters` | — |
-| `GET` | `/api/dashboard/summary` | `database`, `dateFrom`, `dateTo`, `commandType`, `schema`, `object`, `onlyErrors` |
+| `GET` | `/api/meta/servers` | — |
+| `GET` | `/api/meta/server-status` | — |
+| `GET` | `/api/meta/filters` | `server` |
+| `GET` | `/api/dashboard/summary` | standard filters |
 | `GET` | `/api/statistics/most-modified` | standard filters + `limit` (1–500, default 50) |
 | `GET` | `/api/indexes/top-fragmented` | standard filters + `limit` (1–500, default 50) |
 | `GET` | `/api/maintenance/summary` | standard filters + `granularity` (day/week/month) |
@@ -401,6 +405,7 @@ All endpoints (except `/api/meta/health`) require HTTP Basic Auth when `auth.ena
 
 | Parameter | Type | Description |
 |---|---|---|
+| `server` | string | Target server name (as defined in `servers[].name`); defaults to first server |
 | `database` | string | Filter by database name |
 | `dateFrom` | `YYYY-MM-DD` | Start date (inclusive) |
 | `dateTo` | `YYYY-MM-DD` | End date (inclusive) |
