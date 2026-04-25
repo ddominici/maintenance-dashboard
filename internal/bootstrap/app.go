@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"time"
 
 	appbackup "maintenance-dashboard/internal/app/backup"
@@ -115,5 +117,27 @@ func NewApp() (*App, error) {
 
 func (a *App) Run() error {
 	a.logger.Infof("starting %s on %s", a.cfg.App.Name, a.server.Addr)
+	host := a.cfg.App.Host
+	if host == "" || host == "0.0.0.0" {
+		host = "localhost"
+	}
+	url := fmt.Sprintf("http://%s:%d", host, a.cfg.App.Port)
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		openBrowser(url)
+	}()
 	return a.server.ListenAndServe()
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Start()
 }
