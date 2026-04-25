@@ -31,7 +31,6 @@ internal/
     meta/
     operations/
     statistics/
-    shared/
   domain/commandlog/  # Repository interfaces and domain models
   bootstrap/app.go    # DI container — wires all dependencies
   infra/
@@ -112,7 +111,7 @@ Two-tier config: YAML file first, environment variables override.
 
 ```yaml
 app:
-  host, port, env
+  name, host, port, env
   read/write/idle timeout seconds
 
 auth:
@@ -125,6 +124,8 @@ servers:                    # list of named SQL Server connections
       host, port, instance, name
       username, password
       encrypt, trust_server_certificate
+      connection_timeout_seconds
+      max_open_conns, max_idle_conns, conn_max_lifetime_minutes
 
 # Legacy single-server format still supported (auto-migrated to servers[0] named "default"):
 # database:
@@ -134,6 +135,7 @@ servers:                    # list of named SQL Server connections
 cache:
   enabled
   default_ttl_seconds, dashboard_ttl_seconds, detail_ttl_seconds, filters_ttl_seconds
+  cleanup_interval_seconds
 
 ui:
   default_language: en | it
@@ -183,11 +185,16 @@ HTTP Handler  →  Service (app/)  →  Repository Interface (domain/)
 - Wrapped errors: `fmt.Errorf("context: %w", err)`
 - JSON error responses: `{"error": {"code": "...", "message": "..."}}`
 
+### Startup — Browser auto-open
+On `Run()`, the server spawns a goroutine that waits 500 ms then calls the platform-native open command (`open` on macOS, `rundll32` on Windows, `xdg-open` on Linux) to launch the dashboard URL in the default browser.
+
 ### Frontend — Feature-based
 - Each page isolated under `src/features/<name>/`
 - Shared UI in `src/components/`
 - React Query manages all server state
 - `src/api/` wraps raw fetch calls
+- Sidebar includes a server selector dropdown; offline servers are shown as disabled options
+- `ReachableGuard` (in `Router.tsx`) wraps all routes except `/servers`; redirects to `/servers` when no servers are configured, the list fails to load, or the selected server is offline
 
 ---
 
