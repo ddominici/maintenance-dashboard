@@ -9,6 +9,7 @@ Web dashboard to visualise and analyse SQL Server maintenance metrics recorded b
 - [Quick start with pre-built binary](#quick-start-with-pre-built-binary)
 - [Build from source](#build-from-source)
 - [Configuration](#configuration)
+- [Encrypting credentials](#encrypting-credentials)
 - [Running](#running)
 - [Available pages](#available-pages)
 - [REST API](#rest-api)
@@ -234,7 +235,7 @@ app:
 auth:
   enabled: true                 # false = no authentication
   username: admin
-  password: change-me           # change this before going to production
+  password: change-me           # plain-text or encrypted (enc:...) — change before going to production
 
 # Multiple servers — each entry is selectable from the UI dropdown.
 # mode: sql = SQL Server authentication; integrated = Windows Authentication (Windows hosts only)
@@ -246,8 +247,8 @@ servers:
       port: 1433                # port (SQL Server default: 1433)
       instance: ""              # named instance (e.g. "SQLEXPRESS"); leave empty for default
       name: MaintenanceDB       # database that contains CommandLog
-      username: sa              # SQL login (ignored when mode: integrated)
-      password: your-password   # SQL password (ignored when mode: integrated)
+      username: sa              # SQL login (ignored when mode: integrated) — plain-text or enc:...
+      password: your-password   # SQL password (ignored when mode: integrated) — plain-text or enc:...
       encrypt: false            # true = encrypt the connection with TLS
       trust_server_certificate: true # true = accept self-signed certificates
       connection_timeout_seconds: 10
@@ -303,6 +304,7 @@ Every `app`, `auth`, `cache`, and `ui` YAML field has a corresponding environmen
 | `AUTH_ENABLED` | `auth.enabled` | `true` |
 | `AUTH_USERNAME` | `auth.username` | `admin` |
 | `AUTH_PASSWORD` | `auth.password` | `s3cr3t` |
+| `ENCRYPTION_KEY` | — | 32-byte key as 64 hex chars or base64 (enables credential encryption) |
 | `CACHE_ENABLED` | `cache.enabled` | `true` |
 | `CACHE_DEFAULT_TTL_SECONDS` | `cache.default_ttl_seconds` | `60` |
 | `CACHE_DASHBOARD_TTL_SECONDS` | `cache.dashboard_ttl_seconds` | `30` |
@@ -318,6 +320,7 @@ Server connection parameters (host, credentials, etc.) must be set in `configs/c
 
 ```dotenv
 AUTH_PASSWORD=my-secure-password
+ENCRYPTION_KEY=0102...1e1f   # 64 hex chars; keep this out of config.yaml
 ```
 
 ### Windows Authentication
@@ -354,6 +357,65 @@ servers:
       encrypt: true
       trust_server_certificate: false  # false = verify the certificate (recommended in production)
 ```
+
+---
+
+## Encrypting credentials
+
+Sensitive fields in `config.yaml` — `auth.password` and `servers[].database.username` / `password` — can be stored encrypted instead of in plain text. Encrypted values use the format `enc:<base64>` and are decrypted at startup with AES-256-GCM.
+
+Plain-text values continue to work as before; encryption is opt-in per field.
+
+### Setup
+
+**1. Generate a 32-byte key**
+
+```bash
+openssl rand -hex 32
+# example output: 5f3b...e4a1  (64 hex characters)
+```
+
+Store the key in `.env` or your secret manager — **never** put it in `config.yaml`.
+
+**.env**
+```dotenv
+ENCRYPTION_KEY=5f3b...e4a1
+```
+
+**2. Encrypt a value**
+
+```bash
+ENCRYPTION_KEY=5f3b...e4a1 ./maintenance-dashboard encrypt "my-sql-password"
+# → enc:6T9abc...==
+```
+
+On Windows (PowerShell):
+
+```powershell
+$env:ENCRYPTION_KEY = "5f3b...e4a1"
+.\maintenance-dashboard-windows-amd64.exe encrypt "my-sql-password"
+```
+
+**3. Paste the result into `config.yaml`**
+
+```yaml
+auth:
+  password: enc:6T9abc...==
+
+servers:
+  - name: production
+    database:
+      mode: sql
+      username: enc:Xp1...==
+      password: enc:6T9abc...==
+```
+
+### Notes
+
+- If `ENCRYPTION_KEY` is not set, all values are read as plain text — nothing changes
+- If a field contains `enc:...` but `ENCRYPTION_KEY` is absent, the server fails to start with a clear error
+- Each call to `encrypt` produces a different ciphertext (random nonce) for the same plaintext — this is expected and secure
+- The same key must be used for both encrypting and running the server
 
 ---
 

@@ -9,6 +9,7 @@ Dashboard web per visualizzare e analizzare le metriche di manutenzione SQL Serv
 - [Avvio rapido con binario precompilato](#avvio-rapido-con-binario-precompilato)
 - [Build dal sorgente](#build-dal-sorgente)
 - [Configurazione](#configurazione)
+- [Cifratura delle credenziali](#cifratura-delle-credenziali)
 - [Avvio](#avvio)
 - [Pagine disponibili](#pagine-disponibili)
 - [API REST](#api-rest)
@@ -234,7 +235,7 @@ app:
 auth:
   enabled: true                 # false = nessuna autenticazione
   username: admin
-  password: change-me           # cambiare prima della messa in produzione
+  password: change-me           # testo in chiaro o cifrato (enc:...) — cambiare prima della messa in produzione
 
 # Più server — ogni voce è selezionabile dal menu a tendina nell'interfaccia utente.
 # mode: sql = autenticazione SQL Server; integrated = Windows Authentication (solo Windows)
@@ -246,8 +247,8 @@ servers:
       port: 1433                # porta (default SQL Server: 1433)
       instance: ""              # nome istanza named (es. "SQLEXPRESS"); lasciare vuoto per default
       name: MaintenanceDB       # database che contiene CommandLog
-      username: sa              # utente SQL (ignorato se mode: integrated)
-      password: your-password   # password SQL (ignorato se mode: integrated)
+      username: sa              # utente SQL (ignorato se mode: integrated) — testo in chiaro o enc:...
+      password: your-password   # password SQL (ignorato se mode: integrated) — testo in chiaro o enc:...
       encrypt: false            # true = cifra la connessione TLS
       trust_server_certificate: true # true = accetta certificati autofirmati
       connection_timeout_seconds: 10
@@ -303,6 +304,7 @@ I campi `app`, `auth`, `cache` e `ui` del file YAML corrispondono a variabili d'
 | `AUTH_ENABLED` | `auth.enabled` | `true` |
 | `AUTH_USERNAME` | `auth.username` | `admin` |
 | `AUTH_PASSWORD` | `auth.password` | `s3cr3t` |
+| `ENCRYPTION_KEY` | — | Chiave a 32 byte come 64 caratteri hex o base64 (abilita la cifratura delle credenziali) |
 | `CACHE_ENABLED` | `cache.enabled` | `true` |
 | `CACHE_DEFAULT_TTL_SECONDS` | `cache.default_ttl_seconds` | `60` |
 | `CACHE_DASHBOARD_TTL_SECONDS` | `cache.dashboard_ttl_seconds` | `30` |
@@ -318,6 +320,7 @@ I parametri di connessione al server (host, credenziali, ecc.) devono essere imp
 
 ```dotenv
 AUTH_PASSWORD=mia-password-sicura
+ENCRYPTION_KEY=0102...1e1f   # 64 caratteri hex; non inserire mai questo valore in config.yaml
 ```
 
 ### Connessione con Windows Authentication
@@ -354,6 +357,65 @@ servers:
       encrypt: true
       trust_server_certificate: false  # false = verifica il certificato (raccomandato in produzione)
 ```
+
+---
+
+## Cifratura delle credenziali
+
+I campi sensibili in `config.yaml` — `auth.password` e `servers[].database.username` / `password` — possono essere memorizzati cifrati anziché in testo in chiaro. I valori cifrati usano il formato `enc:<base64>` e vengono decifrati all'avvio con AES-256-GCM.
+
+I valori in testo in chiaro continuano a funzionare come in precedenza; la cifratura è facoltativa per ogni singolo campo.
+
+### Configurazione
+
+**1. Generare una chiave a 32 byte**
+
+```bash
+openssl rand -hex 32
+# esempio: 5f3b...e4a1  (64 caratteri hex)
+```
+
+Conserva la chiave nel file `.env` o in un secret manager — **non** inserirla mai in `config.yaml`.
+
+**.env**
+```dotenv
+ENCRYPTION_KEY=5f3b...e4a1
+```
+
+**2. Cifrare un valore**
+
+```bash
+ENCRYPTION_KEY=5f3b...e4a1 ./maintenance-dashboard encrypt "mia-password-sql"
+# → enc:6T9abc...==
+```
+
+Su Windows (PowerShell):
+
+```powershell
+$env:ENCRYPTION_KEY = "5f3b...e4a1"
+.\maintenance-dashboard-windows-amd64.exe encrypt "mia-password-sql"
+```
+
+**3. Incollare il risultato in `config.yaml`**
+
+```yaml
+auth:
+  password: enc:6T9abc...==
+
+servers:
+  - name: production
+    database:
+      mode: sql
+      username: enc:Xp1...==
+      password: enc:6T9abc...==
+```
+
+### Note
+
+- Se `ENCRYPTION_KEY` non è impostata, tutti i valori vengono letti come testo in chiaro — nessuna variazione rispetto al comportamento precedente
+- Se un campo contiene `enc:...` ma `ENCRYPTION_KEY` è assente, il server non si avvia e mostra un errore esplicito
+- Ogni chiamata a `encrypt` produce un testo cifrato diverso per la stessa stringa in chiaro (nonce casuale) — questo è il comportamento corretto e sicuro
+- La stessa chiave deve essere usata sia per cifrare i valori sia durante l'esecuzione del server
 
 ---
 

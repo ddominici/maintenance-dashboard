@@ -7,9 +7,20 @@ app:
   write_timeout_seconds: 15
   idle_timeout_seconds: 60
 
+# Sensitive fields (auth.password, database username/password) can be stored encrypted.
+# Encrypted values use the format:  enc:<base64-ciphertext>
+# The encryption key must be set via the ENCRYPTION_KEY environment variable as a
+# 32-byte value encoded as 64 hex chars (e.g. openssl rand -hex 32) or base64.
+#
+# To generate an encrypted value:
+#   ENCRYPTION_KEY=<your-key> ./maintenance-dashboard encrypt "my-secret"
+#
+# Plain-text values continue to work when ENCRYPTION_KEY is not set.
+
 auth:
   enabled: true
   username: admin
+  # Plain-text or encrypted, e.g.: enc:6T9...==
   password: change-me
 
 # Multiple servers — each entry is selectable from the UI dropdown.
@@ -23,6 +34,7 @@ servers:
       port: 1433
       instance: ""
       name: MaintenanceDB
+      # Plain-text or encrypted, e.g.: enc:6T9...==
       username: sa
       password: your-password
       encrypt: false
@@ -38,6 +50,7 @@ servers:
       port: 1433
       instance: ""
       name: MaintenanceDB
+      # Plain-text or encrypted, e.g.: enc:6T9...==
       username: sa
       password: your-password
       encrypt: false

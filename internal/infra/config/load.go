@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"maintenance-dashboard/internal/infra/crypto"
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,10 +31,54 @@ func Load(path string) (Config, error) {
 		cfg.Servers = []ServerConfig{{Name: "default", Database: cfg.Database}}
 	}
 
+	key, err := crypto.LoadKey()
+	if err != nil {
+		return Config{}, fmt.Errorf("encryption key: %w", err)
+	}
+	if err := decryptSensitive(&cfg, key); err != nil {
+		return Config{}, fmt.Errorf("decrypt config: %w", err)
+	}
+
 	if err := Validate(cfg); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+// decryptSensitive decrypts all sensitive fields that carry the "enc:" prefix.
+// Plain-text values pass through unchanged; key may be nil when encryption is not configured.
+func decryptSensitive(cfg *Config, key []byte) error {
+	dec := func(field string, s *string) error {
+		v, err := crypto.Decrypt(key, *s)
+		if err != nil {
+			return fmt.Errorf("%s: %w", field, err)
+		}
+		*s = v
+		return nil
+	}
+
+	if err := dec("auth.password", &cfg.Auth.Password); err != nil {
+		return err
+	}
+	// Legacy single-server block (used before auto-migration).
+	if err := dec("database.username", &cfg.Database.Username); err != nil {
+		return err
+	}
+	if err := dec("database.password", &cfg.Database.Password); err != nil {
+		return err
+	}
+	for i := range cfg.Servers {
+		prefix := fmt.Sprintf("servers[%d](%s).database", i, cfg.Servers[i].Name)
+		if cfg.Servers[i].Database.Mode == "sql" {
+			if err := dec(prefix+".username", &cfg.Servers[i].Database.Username); err != nil {
+				return err
+			}
+			if err := dec(prefix+".password", &cfg.Servers[i].Database.Password); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func defaults() Config {

@@ -57,7 +57,9 @@ export function ServerProvider({ children }: PropsWithChildren) {
     setCurrentServer(server)
     setSelectedServerState(server)
     localStorage.setItem('selectedServer', server)
-    queryClient.invalidateQueries()
+    // Purge the cache so data from the previous server is never shown:
+    // active queries refetch from scratch, inactive ones are dropped.
+    queryClient.removeQueries()
   }
 
   if (isLoading) {
