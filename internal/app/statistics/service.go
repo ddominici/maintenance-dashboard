@@ -21,13 +21,13 @@ func NewService(repo commandlog.StatisticsRepository, cache cache.Cache, ttl tim
 	return &Service{repo: repo, cache: cache, ttl: ttl}
 }
 
-func (s *Service) GetMostModifiedStatistics(ctx context.Context, filters commandlog.QueryFilters, limit int) ([]commandlog.StatisticsRow, error) {
-	key := cacheKey(filters, limit)
+func (s *Service) GetMostModifiedStatistics(ctx context.Context, filters commandlog.QueryFilters, limit int, sort commandlog.SortSpec) ([]commandlog.StatisticsRow, error) {
+	key := cacheKey(filters, limit, sort)
 	var out []commandlog.StatisticsRow
 	if s.cache != nil && s.cache.Get(key, &out) {
 		return out, nil
 	}
-	out, err := s.repo.GetMostModifiedStatistics(ctx, filters, limit)
+	out, err := s.repo.GetMostModifiedStatistics(ctx, filters, limit, sort)
 	if err != nil {
 		return nil, err
 	}
@@ -37,11 +37,12 @@ func (s *Service) GetMostModifiedStatistics(ctx context.Context, filters command
 	return out, nil
 }
 
-func cacheKey(filters commandlog.QueryFilters, limit int) string {
+func cacheKey(filters commandlog.QueryFilters, limit int, sort commandlog.SortSpec) string {
 	b, _ := json.Marshal(struct {
 		F commandlog.QueryFilters
 		L int
-	}{filters, limit})
+		S commandlog.SortSpec
+	}{filters, limit, sort})
 	sum := sha1.Sum(b)
 	return fmt.Sprintf("statistics:most-modified:%x", sum)
 }

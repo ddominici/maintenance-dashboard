@@ -29,7 +29,7 @@ func (h IndexesHandler) TopFragmented(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	data, err := svc.GetTopFragmentedIndexes(r.Context(), filters, limit)
+	data, err := svc.GetTopFragmentedIndexes(r.Context(), filters, limit, ParseSort(r))
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "indexes_failed", err.Error())
 		return

@@ -24,6 +24,32 @@ function Th({ children, right }: { children: React.ReactNode; right?: boolean })
   )
 }
 
+function SortableTh({
+  children,
+  active,
+  dir,
+  onClick,
+}: {
+  children: React.ReactNode
+  active: boolean
+  dir: 'asc' | 'desc'
+  onClick: () => void
+}) {
+  return (
+    <th
+      onClick={onClick}
+      className="cursor-pointer select-none whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <span className={`text-[10px] ${active ? 'text-slate-700' : 'text-slate-300'}`}>
+          {active ? (dir === 'asc' ? '▲' : '▼') : '↕'}
+        </span>
+      </span>
+    </th>
+  )
+}
+
 // Modification counter relative to page count: indicates how stale stats were
 // when last updated.  Thresholds mirror the auto-update trigger (~20% of rows).
 //   < 10%  → low churn (emerald)
@@ -85,11 +111,24 @@ function TableRow({ row, index }: { row: StatisticsRow; index: number }) {
   )
 }
 
+type SortKey = 'lastModificationCounter'
+
 export function MostModifiedStatisticsPage() {
   const [database, setDatabase] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [limit, setLimit] = useState(50)
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams()
@@ -97,14 +136,22 @@ export function MostModifiedStatisticsPage() {
     if (dateFrom) p.set('dateFrom', dateFrom)
     if (dateTo) p.set('dateTo', dateTo)
     p.set('limit', String(limit))
+    // Sort server-side so the limit captures the true top rows of the full
+    // dataset, not just a re-ordering of the default top-N.
+    if (sortKey) {
+      p.set('sortBy', sortKey)
+      p.set('sortDir', sortDir)
+    }
     return `?${p.toString()}`
-  }, [database, dateFrom, dateTo, limit])
+  }, [database, dateFrom, dateTo, limit, sortKey, sortDir])
 
   const filtersQuery = useQuery({ queryKey: ['filters'], queryFn: getFilterOptions })
   const statsQuery = useQuery({
-    queryKey: ['statistics-most-modified', database, dateFrom, dateTo, limit],
+    queryKey: ['statistics-most-modified', database, dateFrom, dateTo, limit, sortKey, sortDir],
     queryFn: () => getMostModifiedStatistics(queryString),
   })
+
+  const rows = statsQuery.data?.data ?? []
 
   return (
     <div className="space-y-6">
@@ -197,12 +244,18 @@ export function MostModifiedStatisticsPage() {
                     <Th right>Avg Duration (s)</Th>
                     <Th right>Errors</Th>
                     <Th right>Page Count</Th>
-                    <Th>Last Mod. Counter</Th>
+                    <SortableTh
+                      active={sortKey === 'lastModificationCounter'}
+                      dir={sortDir}
+                      onClick={() => toggleSort('lastModificationCounter')}
+                    >
+                      Last Mod. Counter
+                    </SortableTh>
                     <Th right>Max Mod. Counter</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {statsQuery.data.data.map((row, i) => (
+                  {rows.map((row, i) => (
                     <TableRow key={`${row.database}-${row.schema}-${row.object}`} row={row} index={i} />
                   ))}
                 </tbody>

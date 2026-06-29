@@ -50,3 +50,14 @@ func ParseFilters(r *http.Request) (commandlog.QueryFilters, error) {
 	}
 	return f, nil
 }
+
+// ParseSort reads the optional sortBy/sortDir query params. The repository
+// whitelists sortBy against its known columns, so an unrecognized value simply
+// falls back to the query's default ordering rather than erroring.
+func ParseSort(r *http.Request) commandlog.SortSpec {
+	q := r.URL.Query()
+	return commandlog.SortSpec{
+		By:  q.Get("sortBy"),
+		Dir: q.Get("sortDir"),
+	}
+}

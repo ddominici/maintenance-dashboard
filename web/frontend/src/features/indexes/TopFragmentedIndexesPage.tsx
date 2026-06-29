@@ -32,6 +32,32 @@ function ThRight({ children }: { children: React.ReactNode }) {
   )
 }
 
+function SortableTh({
+  children,
+  active,
+  dir,
+  onClick,
+}: {
+  children: React.ReactNode
+  active: boolean
+  dir: 'asc' | 'desc'
+  onClick: () => void
+}) {
+  return (
+    <th
+      onClick={onClick}
+      className="cursor-pointer select-none whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <span className={`text-[10px] ${active ? 'text-slate-700' : 'text-slate-300'}`}>
+          {active ? (dir === 'asc' ? '▲' : '▼') : '↕'}
+        </span>
+      </span>
+    </th>
+  )
+}
+
 function Badge({ count, color }: { count: number; color: string }) {
   if (count === 0) return <span className="text-slate-400">0</span>
   return <span className={`font-semibold ${color}`}>{count.toLocaleString()}</span>
@@ -94,11 +120,24 @@ function Row({ row, index }: { row: IndexRow; index: number }) {
   )
 }
 
+type SortKey = 'lastFragmentation' | 'maxFragmentation'
+
 export function TopFragmentedIndexesPage() {
   const [database, setDatabase] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [limit, setLimit] = useState(50)
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams()
@@ -106,14 +145,22 @@ export function TopFragmentedIndexesPage() {
     if (dateFrom) p.set('dateFrom', dateFrom)
     if (dateTo) p.set('dateTo', dateTo)
     p.set('limit', String(limit))
+    // Sort server-side so the limit captures the true top rows of the full
+    // dataset, not just a re-ordering of the default top-N.
+    if (sortKey) {
+      p.set('sortBy', sortKey)
+      p.set('sortDir', sortDir)
+    }
     return `?${p.toString()}`
-  }, [database, dateFrom, dateTo, limit])
+  }, [database, dateFrom, dateTo, limit, sortKey, sortDir])
 
   const filtersQuery = useQuery({ queryKey: ['filters'], queryFn: getFilterOptions })
   const indexesQuery = useQuery({
-    queryKey: ['indexes-top-fragmented', database, dateFrom, dateTo, limit],
+    queryKey: ['indexes-top-fragmented', database, dateFrom, dateTo, limit, sortKey, sortDir],
     queryFn: () => getTopFragmentedIndexes(queryString),
   })
+
+  const rows = indexesQuery.data?.data ?? []
 
   return (
     <div className="space-y-6">
@@ -211,12 +258,24 @@ export function TopFragmentedIndexesPage() {
                     <Th>Last Operation</Th>
                     <ThRight>Avg Duration (s)</ThRight>
                     <ThRight>Errors</ThRight>
-                    <Th>Last Fragm.</Th>
-                    <Th>Max Fragm.</Th>
+                    <SortableTh
+                      active={sortKey === 'lastFragmentation'}
+                      dir={sortDir}
+                      onClick={() => toggleSort('lastFragmentation')}
+                    >
+                      Last Fragm.
+                    </SortableTh>
+                    <SortableTh
+                      active={sortKey === 'maxFragmentation'}
+                      dir={sortDir}
+                      onClick={() => toggleSort('maxFragmentation')}
+                    >
+                      Max Fragm.
+                    </SortableTh>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {indexesQuery.data.data.map((row, i) => (
+                  {rows.map((row, i) => (
                     <Row
                       key={`${row.database}-${row.schema}-${row.object}-${row.index}`}
                       row={row}

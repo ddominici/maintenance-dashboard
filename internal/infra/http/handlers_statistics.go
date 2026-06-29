@@ -29,7 +29,7 @@ func (h StatisticsHandler) MostModified(w http.ResponseWriter, r *http.Request) 
 		}
 		limit = n
 	}
-	data, err := svc.GetMostModifiedStatistics(r.Context(), filters, limit)
+	data, err := svc.GetMostModifiedStatistics(r.Context(), filters, limit, ParseSort(r))
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "statistics_failed", err.Error())
 		return

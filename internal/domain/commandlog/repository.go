@@ -43,7 +43,7 @@ type DashboardRepository interface {
 }
 
 type StatisticsRepository interface {
-	GetMostModifiedStatistics(ctx context.Context, filters QueryFilters, limit int) ([]StatisticsRow, error)
+	GetMostModifiedStatistics(ctx context.Context, filters QueryFilters, limit int, sort SortSpec) ([]StatisticsRow, error)
 }
 
 type IndexRow struct {
@@ -63,7 +63,7 @@ type IndexRow struct {
 }
 
 type IndexRepository interface {
-	GetTopFragmentedIndexes(ctx context.Context, filters QueryFilters, limit int) ([]IndexRow, error)
+	GetTopFragmentedIndexes(ctx context.Context, filters QueryFilters, limit int, sort SortSpec) ([]IndexRow, error)
 }
 
 type MaintenanceSummaryRow struct {

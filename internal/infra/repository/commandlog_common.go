@@ -51,3 +51,21 @@ func buildFilters(filters commandlog.QueryFilters, startIndex int) (string, []an
 	}
 	return " WHERE " + strings.Join(clauses, " AND "), args
 }
+
+// buildOrderBy produces an ORDER BY clause from a caller-supplied SortSpec.
+// columns whitelists the logical sort keys → SQL column/alias names, so the
+// final SQL never contains raw user input (guarding against injection). When
+// sort.By is empty or unknown, the query's default ordering (def, e.g.
+// "TotalOperations DESC") is used. NULLs are always ordered last regardless of
+// direction, matching the previous client-side sort behavior.
+func buildOrderBy(columns map[string]string, sort commandlog.SortSpec, def string) string {
+	col, ok := columns[sort.By]
+	if !ok {
+		return " ORDER BY " + def
+	}
+	dir := "DESC"
+	if strings.EqualFold(sort.Dir, "asc") {
+		dir = "ASC"
+	}
+	return fmt.Sprintf(" ORDER BY CASE WHEN %s IS NULL THEN 1 ELSE 0 END, %s %s", col, col, dir)
+}
